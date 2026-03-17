@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zenith | Intelligence Sage</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --p: #6366f1; --bg: #f8fafc; --side: #0f172a; --border: #e2e8f0; }
+        body { font-family: 'Inter', sans-serif; margin: 0; display: flex; height: 100vh; background: white; color: #1e293b; overflow: hidden; }
+
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--side); color: white; display: flex; flex-direction: column; padding: 20px; }
+        .new-btn { background: var(--p); border: none; color: white; padding: 12px; border-radius: 10px; cursor: pointer; font-weight: 600; margin-bottom: 20px; }
+        .history { flex: 1; overflow-y: auto; font-size: 13px; opacity: 0.8; }
+        .history-item { padding: 10px; border-radius: 8px; cursor: pointer; margin-bottom: 5px; }
+        .history-item:hover { background: rgba(255,255,255,0.1); }
+        .history-item.active { background: rgba(255,255,255,0.2); font-weight: 600; }
+
+        /* Main */
+        .main { flex: 1; display: flex; flex-direction: column; }
+        header { padding: 15px 40px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 18px; color: var(--p); margin: 0; text-transform: uppercase; letter-spacing: 2px; }
+
+        .chat-box { flex: 1; overflow-y: auto; padding-bottom: 50px; }
+        .msg { padding: 25px 18%; display: flex; gap: 20px; border-bottom: 1px solid transparent; }
+        .ai-msg { background: #f1f5f9; border-color: var(--border); }
+        .avatar { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .z-av { background: var(--p); color: white; }
+        .u-av { background: #cbd5e1; color: #475569; }
+        .txt { font-size: 15px; line-height: 1.6; width: 100%; }
+        
+        /* Styles Images */
+        .img-wrap { margin-top: 15px; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: #eee; max-width: 512px; }
+        .img-wrap img { width: 100%; display: block; }
+
+        /* Input Area */
+        .bottom { padding: 20px 18% 40px; background: white; border-top: 1px solid var(--border); }
+        .bar { border: 2px solid var(--border); border-radius: 15px; padding: 10px 15px; display: flex; align-items: flex-end; gap: 10px; background: #fff; }
+        .bar:focus-within { border-color: var(--p); }
+        textarea { flex: 1; border: none; outline: none; resize: none; font-size: 15px; padding: 10px 0; max-height: 150px; font-family: inherit; }
+        .btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #64748b; padding: 5px; border-radius: 8px; transition: 0.2s; }
+        .btn:hover { color: var(--p); background: #f1f5f9; }
+        .send { background: var(--p); color: white; width: 35px; height: 35px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+        
+        #file-st { font-size: 11px; color: var(--p); margin-bottom: 8px; display: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <button class="new-btn" onclick="startNew()">+ Nouvelle Sagesse</button>
+    <div class="history" id="hList"></div>
+</aside>
+
+<main class="main">
+    <header><h1>Zenith</h1><div id="status">● Actif</div></header>
+    <div class="chat-box" id="cBox"></div>
+    <div class="bottom">
+        <div id="file-st">📎 Fichier prêt pour analyse</div>
+        <div class="bar">
+            <input type="file" id="fIn" hidden onchange="up()">
+            <button class="btn" onclick="document.getElementById('fIn').click()" title="Fichier">📎</button>
+            <button class="btn" id="mBtn" onclick="vocal()">🎤</button>
+            <textarea id="uIn" rows="1" placeholder="Posez une question ou demandez une image..." oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+            <button class="btn send" onclick="go()">➔</button>
+        </div>
+    </div>
+</main>
+
+<script>
+    let chats = JSON.parse(localStorage.getItem('z_v3')) || [];
+    let cur = localStorage.getItem('z_id');
+    let fTxt = "";
+
+    window.onload = () => { if(cur) load(cur); list(); };
+
+    function startNew() { cur = Date.now().toString(); chats.unshift({id:cur, title:"Nouveau", messages:[]}); save(); load(cur); }
+    function save() { localStorage.setItem('z_v3', JSON.stringify(chats)); localStorage.setItem('z_id', cur); }
+    function load(id) { cur = id; save(); show(); list(); }
+
+    function show() {
+        const chat = chats.find(c => c.id === cur);
+        const box = document.getElementById('cBox');
+        box.innerHTML = chat.messages.map(m => `
+            <div class="msg ${m.role==='assistant'?'ai-msg':''}">
+                <div class="avatar ${m.role==='user'?'u-av':'z-av'}">${m.role==='user'?'U':'Z'}</div>
+                <div class="txt">${parse(m.content, m.role)}</div>
+            </div>
+        `).join('');
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function parse(t, r) {
+        if(r === 'user') return t.split(' [FILE]')[0];
+        const res = t.replace(/\{IMAGE:(.*?)\}/g, (m, p) => {
+            const url = `https://pollinations.ai/p/${encodeURIComponent(p.trim())}?width=1024&height=1024&nologo=true&seed=${Math.random()}`;
+            return `<div class="img-wrap"><img src="${url}" alt="Zenith dessine..."></div>`;
+        });
+        return marked.parse(res);
+    }
+
+    async function up() {
+        const f = document.getElementById('fIn').files[0];
+        if(!f) return;
+        document.getElementById('file-st').style.display = "block";
+        if(f.type === "application/pdf") {
+            const b = await f.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({data:b}).promise;
+            let t = "";
+            for(let i=1; i<=pdf.numPages; i++) {
+                const p = await pdf.getPage(i);
+                const c = await p.getTextContent();
+                t += c.items.map(it => it.str).join(" ") + " ";
+            }
+            fTxt = t;
+        } else { fTxt = await f.text(); }
+    }
+
+    async function go() {
+        const inpt = document.getElementById('uIn');
+        let val = inpt.value.trim();
+        if(!val && !fTxt) return;
+        if(!cur) startNew();
+        const chat = chats.find(c => c.id === cur);
+        if(chat.messages.length === 0) chat.title = val.substring(0, 25) || "Analyse";
+        
+        let msg = val;
+        if(fTxt) { msg += " [FILE]: " + fTxt; fTxt = ""; document.getElementById('file-st').style.display="none"; }
+        
+        chat.messages.push({role:'user', content:msg});
+        inpt.value = ""; inpt.style.height = "auto";
+        show();
+
+        try {
+            const r = await fetch('http://localhost:3000/api/chat', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({messages: chat.messages})
+            });
+            const d = await r.json();
+            chat.messages.push({role:'assistant', content:d.texte});
+            save(); show(); list();
+        } catch(e) { alert("Erreur."); }
+    }
+
+    function list() { document.getElementById('hList').innerHTML = chats.map(c => `<div class="history-item ${c.id===cur?'active':''}" onclick="load('${c.id}')">💬 ${c.title}</div>`).join(''); }
+    
+    function vocal() {
+        const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        rec.lang = 'fr-FR';
+        rec.onstart = () => document.getElementById('mBtn').style.color="red";
+        rec.onresult = (e) => { document.getElementById('uIn').value = e.results[0][0].transcript; go(); };
+        rec.onend = () => document.getElementById('mBtn').style.color="inherit";
+        rec.start();
+    }
+    document.getElementById('uIn').addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); go(); }});
+</script>
+</body>
+</html>
