@@ -1,31 +1,36 @@
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const Groq = require('groq-sdk');
-
+const path = require('path'); // Nécessaire pour gérer les chemins de fichiers
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Le port utilisé par Render (ou 3000 sur votre ordinateur)
+const PORT = process.env.PORT || 3000;
 
-const SYSTEM_PROMPT = `Tu es Zenith, une IA d'une sagesse infinie.
-RÈGLES CRITIQUES :
-1. Si l'utilisateur demande une image, tu DOIS générer une description en anglais et l'insérer EXACTEMENT ainsi : {IMAGE:ta description ici}.
-2. Ne dis JAMAIS que tu ne peux pas générer d'images.
-3. Pour les fichiers, analyse le texte fourni et réponds avec précision.`;
+// 1. Permet au serveur de comprendre les messages (JSON) envoyés par votre site
+app.use(express.json());
 
-app.post('/api/chat', async (req, res) => {
-    try {
-        const completion = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [{ role: "system", content: SYSTEM_PROMPT }, ...req.body.messages],
-            temperature: 0.6,
-        });
-        res.json({ texte: completion.choices[0].message.content });
-    } catch (error) {
-        res.status(500).json({ error: "Erreur de réflexion." });
-    }
+// 2. LA SOLUTION AU "Cannot GET /" : 
+// Autorise le serveur à lire tous les fichiers (index.html, CSS, images) dans le dossier actuel
+app.use(express.static(__dirname));
+
+// 3. Quand quelqu'un arrive sur votre lien Render, on lui affiche l'interface
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(3000, () => console.log("✨ Zenith est prêt sur le port 3000"));
+// =================================================================
+// INSÉREZ VOTRE CODE POUR L'IA (GROQ) JUSTE EN DESSOUS DE CETTE LIGNE
+// (Vos "app.post", votre configuration Groq, etc.)
+// =================================================================
+
+
+
+
+
+// =================================================================
+// FIN DE VOTRE CODE POUR L'IA
+// =================================================================
+
+// 4. Allumage du serveur
+app.listen(PORT, () => {
+    console.log(`Serveur Zenith en ligne sur le port ${PORT}`);
+});
